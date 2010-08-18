@@ -1,0 +1,67 @@
+From 7100889a079559bf095901b13f743f9b85b1fcb7 Mon Sep 17 00:00:00 2001
+From: Myh <mihai.dumitru@gxgnet.ro>
+Date: Sun, 8 Aug 2010 20:08:51 +0300
+Subject: [PATCH] [416] Fixed seal of command damage it should not be multiplied by 1.36
+
+Fixed judgement of command damage it should recieve dmg bonus from max and min weapon damage
+Fixed judgement of command shouldnt crit stunned, incapacitated targets
+---
+ src/server/game/Entities/Unit/Unit.cpp  |    6 ------
+ src/server/game/Spells/SpellEffects.cpp |    9 ++-------
+ src/server/shared/revision_nr.h         |    2 +-
+ 3 files changed, 3 insertions(+), 14 deletions(-)
+
+diff --git a/src/server/game/Entities/Unit/Unit.cpp b/src/server/game/Entities/Unit/Unit.cpp
+index 79b84a4..0272abc 100644
+--- a/src/server/game/Entities/Unit/Unit.cpp
++++ b/src/server/game/Entities/Unit/Unit.cpp
+@@ -10758,12 +10758,6 @@ bool Unit::isSpellCrit(Unit *pVictim, SpellEntry const *spellProto, SpellSchoolM
+                             break;
+                         }
+                     break;
+-                    case SPELLFAMILY_PALADIN:
+-                        // Judgement of Command proc always crits on stunned target
+-                        if (spellProto->SpellFamilyName == SPELLFAMILY_PALADIN)
+-                            if (spellProto->SpellFamilyFlags[0] & 0x0000000000800000LL && spellProto->SpellIconID == 561)
+-                                if (pVictim->hasUnitState(UNIT_STAT_STUNNED))
+-                                    return true;
+                 }
+             }
+         case SPELL_DAMAGE_CLASS_RANGED:
+diff --git a/src/server/game/Spells/SpellEffects.cpp b/src/server/game/Spells/SpellEffects.cpp
+index 0c18fd1..52e760c 100644
+--- a/src/server/game/Spells/SpellEffects.cpp
++++ b/src/server/game/Spells/SpellEffects.cpp
+@@ -4438,17 +4438,12 @@ void Spell::SpellDamageWeaponDmg(uint32 i)
+         }
+         case SPELLFAMILY_PALADIN:
+         {
+-            // Seal of Command - Increase damage by 36% on every swing
+-            if (m_spellInfo->SpellFamilyFlags[0] & 0x2000000)
+-            {
+-                totalDamagePercentMod *= 1.36f;            //136% damage
+-            }
+-
+             // Seal of Command Unleashed
+-            else if (m_spellInfo->Id == 20467)
++			if (m_spellInfo->Id == 20467)
+             {
+                 spell_bonus += int32(0.08f*m_caster->GetTotalAttackPowerValue(BASE_ATTACK));
+                 spell_bonus += int32(0.13f*m_caster->SpellBaseDamageBonus(GetSpellSchoolMask(m_spellInfo)));
++				fixed_bonus += irand(0.19f*(m_caster->GetFloatValue(UNIT_FIELD_MINDAMAGE)),0.19f*(m_caster->GetFloatValue(UNIT_FIELD_MAXDAMAGE)));
+             }
+             break;
+         }
+diff --git a/src/server/shared/revision_nr.h b/src/server/shared/revision_nr.h
+index 53a87f8..47a949d 100644
+--- a/src/server/shared/revision_nr.h
++++ b/src/server/shared/revision_nr.h
+@@ -1,4 +1,4 @@
+ #ifndef __REVISION_NR_H__
+ #define __REVISION_NR_H__
+- #define REVISION_NR "415"
++ #define REVISION_NR "416"
+ #endif // __REVISION_NR_H__
+-- 
+1.5.6.5
+
