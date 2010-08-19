@@ -129,7 +129,7 @@ class WorldSession
 {
     friend class CharacterHandler;
     public:
-        WorldSession(uint32 id, WorldSocket *sock, AccountTypes sec, uint8 expansion, time_t mute_time, LocaleConstant locale);
+        WorldSession(uint32 id, WorldSocket *sock, AccountTypes sec, uint8 expansion, time_t mute_time, LocaleConstant locale, uint32 recruiter);
         ~WorldSession();
 
         bool PlayerLoading() const { return m_playerLoading; }
@@ -192,7 +192,7 @@ class WorldSession
         //void SendTestCreatureQueryOpcode(uint32 entry, uint64 guid, uint32 testvalue);
         void SendNameQueryOpcode(Player* p);
         void SendNameQueryOpcodeFromDB(uint64 guid);
-        static void SendNameQueryOpcodeFromDBCallBack(QueryResult_AutoPtr result, uint32 accountId);
+        void SendNameQueryOpcodeFromDBCallBack(QueryResult_AutoPtr result);
 
         void SendTrainerList(uint64 guid);
         void SendTrainerList(uint64 guid, const std::string& strTitle);
@@ -306,6 +306,8 @@ class WorldSession
             return false;
         }
 
+        // Recruit-A-Friend Handling
+        uint32 GetRecruiterId() { return recruiterId; }
 
     public:                                                 // opcodes handlers
 
@@ -387,10 +389,10 @@ class WorldSession
         void HandleEmoteOpcode(WorldPacket& recvPacket);
         void HandleContactListOpcode(WorldPacket& recvPacket);
         void HandleAddFriendOpcode(WorldPacket& recvPacket);
-        static void HandleAddFriendOpcodeCallBack(QueryResult_AutoPtr result, uint32 accountId, std::string friendNote);
+        void HandleAddFriendOpcodeCallBack(QueryResult_AutoPtr result, std::string friendNote);
         void HandleDelFriendOpcode(WorldPacket& recvPacket);
         void HandleAddIgnoreOpcode(WorldPacket& recvPacket);
-        static void HandleAddIgnoreOpcodeCallBack(QueryResult_AutoPtr result, uint32 accountId);
+        void HandleAddIgnoreOpcodeCallBack(QueryResult_AutoPtr result);
         void HandleDelIgnoreOpcode(WorldPacket& recvPacket);
         void HandleSetContactNotesOpcode(WorldPacket& recvPacket);
         void HandleBugOpcode(WorldPacket& recvPacket);
@@ -663,7 +665,7 @@ class WorldSession
         void HandleSetActionBarToggles(WorldPacket& recv_data);
 
         void HandleCharRenameOpcode(WorldPacket& recv_data);
-        static void HandleChangePlayerNameOpcodeCallBack(QueryResult_AutoPtr result, uint32 accountId, std::string newname);
+        void HandleChangePlayerNameOpcodeCallBack(QueryResult_AutoPtr result, std::string newname);
         void HandleSetPlayerDeclinedNames(WorldPacket& recv_data);
 
         void HandleTotemDestroyed(WorldPacket& recv_data);
@@ -797,6 +799,17 @@ class WorldSession
         void HandleQuestPOIQuery(WorldPacket& recv_data);
         void HandleEjectPasenger(WorldPacket &data);
         void HandleEnterPlayerVehicle(WorldPacket &data);
+
+    private:
+        void ProcessQueryCallbacks();
+
+        ACE_Future_Set<QueryResult_AutoPtr> m_nameQueryCallbacks;    
+        QueryResultFuture m_charEnumCallback;
+        QueryResultFuture m_addIgnoreCallback;
+        QueryCallback<std::string> m_charRenameCallback;
+        QueryCallback<std::string> m_addFriendCallback;
+        QueryResultHolderFuture m_charLoginCallback;
+
     private:
         // private trade methods
         void moveItems(Item* myItems[], Item* hisItems[]);
@@ -827,6 +840,7 @@ class WorldSession
         uint32 m_Tutorials[8];
         bool   m_TutorialsChanged;
         AddonsList m_addonsList;
+        uint32 recruiterId;
         ACE_Based::LockedQueue<WorldPacket*, ACE_Thread_Mutex> _recvQueue;
 };
 #endif

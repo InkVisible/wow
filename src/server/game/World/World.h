@@ -31,6 +31,7 @@
 #include "SharedDefines.h"
 #include "ace/Atomic_Op.h"
 #include "QueryResult.h"
+#include "Callback.h"
 
 #include <map>
 #include <set>
@@ -42,7 +43,6 @@ class WorldSession;
 class Player;
 struct ScriptAction;
 struct ScriptInfo;
-class SqlResultQueue;
 class QueryResult;
 class WorldSocket;
 class SystemMgr;
@@ -102,6 +102,7 @@ enum WorldConfigs
     CONFIG_SOCKET_TIMEOUTTIME,
     CONFIG_SESSION_ADD_DELAY,
     CONFIG_GROUP_XP_DISTANCE,
+    CONFIG_MAX_RECRUIT_A_FRIEND_DISTANCE,
     CONFIG_SIGHT_MONSTER,
     CONFIG_SIGHT_GUARDER,
     CONFIG_GAME_TYPE,
@@ -137,6 +138,8 @@ enum WorldConfigs
     CONFIG_START_HONOR_POINTS,
     CONFIG_MAX_ARENA_POINTS,
     CONFIG_START_ARENA_POINTS,
+    CONFIG_MAX_RECRUIT_A_FRIEND_BONUS_PLAYER_LEVEL,
+    CONFIG_MAX_RECRUIT_A_FRIEND_BONUS_PLAYER_LEVEL_DIFFERENCE,
     CONFIG_INSTANCE_IGNORE_LEVEL,
     CONFIG_INSTANCE_IGNORE_RAID,
     CONFIG_INSTANCE_RESET_TIME_HOUR,
@@ -297,6 +300,9 @@ enum WorldConfigs
     CONFIG_CHARDELETE_MIN_LEVEL,
     CONFIG_CLEAN_CHARACTER_DB,
     CONFIG_DUNGEON_FINDER_ENABLE,
+    CONFIG_MYSQL_BUNDLE_LOGINDB,
+    CONFIG_MYSQL_BUNDLE_CHARDB,
+    CONFIG_MYSQL_BUNDLE_WORLDDB,
     CONFIG_VALUE_COUNT
 };
 
@@ -327,6 +333,7 @@ enum Rates
     RATE_REPUTATION_GAIN,
     RATE_REPUTATION_LOWLEVEL_KILL,
     RATE_REPUTATION_LOWLEVEL_QUEST,
+    RATE_REPUTATION_RECRUIT_A_FRIEND_BONUS,
     RATE_CREATURE_NORMAL_HP,
     RATE_CREATURE_ELITE_ELITE_HP,
     RATE_CREATURE_ELITE_RAREELITE_HP,
@@ -687,9 +694,6 @@ class World
         void ProcessCliCommands();
         void QueueCliCommand(CliCommandHolder* commandHolder) { cliCmdQueue.add(commandHolder); }
 
-        void UpdateResultQueue();
-        void InitResultQueue();
-
         void ForceGameEventUpdate();
 
         void UpdateRealmCharCount(uint32 accid);
@@ -785,7 +789,6 @@ class World
 
         // CLI command holder to be thread safe
         ACE_Based::LockedQueue<CliCommandHolder*,ACE_Thread_Mutex> cliCmdQueue;
-        SqlResultQueue *m_resultQueue;
 
         // next daily quests and random bg reset time
         time_t m_NextDailyQuestReset;
@@ -804,6 +807,10 @@ class World
         std::string m_CreatureEventAIVersion;
 
         std::list<std::string> m_Autobroadcasts;
+
+    private:
+        void ProcessQueryCallbacks();
+        QueryCallback<uint32> m_realmCharCallback;
 };
 
 extern uint32 realmID;

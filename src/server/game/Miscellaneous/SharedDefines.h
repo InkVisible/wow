@@ -1173,8 +1173,8 @@ enum Targets
     TARGET_DEST_CASTER_RADIUS          = 73,
     TARGET_DEST_TARGET_RANDOM          = 74,
     TARGET_DEST_TARGET_RADIUS          = 75,
-    TARGET_DEST_CHANNEL                = 76,
-    TARGET_UNIT_CHANNEL                = 77,
+    TARGET_DEST_CHANNEL_TARGET         = 76,
+    TARGET_UNIT_CHANNEL_TARGET         = 77,
     TARGET_DEST_DEST_FRONT             = 78,
     TARGET_DEST_DEST_BACK              = 79,
     TARGET_DEST_DEST_RIGHT             = 80,
@@ -1187,9 +1187,9 @@ enum Targets
     TARGET_DEST_DEST                   = 87,
     TARGET_DEST_DYNOBJ_NONE            = 88,
     TARGET_DEST_TRAJ                   = 89,
-    TARGET_UNIT_MINIPET                = 90,
+    TARGET_UNIT_TARGET_PUPPET          = 90,
     TARGET_DEST_DEST_RANDOM_DIR_DIST   = 91,
-    TARGET_UNIT_UNK_92                 = 92,
+    TARGET_UNIT_SUMMONER               = 92,
     TARGET_CORPSE_AREA_ENEMY_PLAYER_SRC= 93, // TODO
     TARGET_UNIT_VEHICLE                = 94,
     TARGET_UNIT_DRIVER                 = 95,
@@ -1203,13 +1203,12 @@ enum Targets
     TARGET_UNIT_PASSENGER_7            = 103,
     TARGET_UNIT_AREA_PATH              = 104,
     TARGET_UNIT_UNK_105                = 105, // 1 spell
-    TARGET_DEST_CHANNEL_TARGET         = 106, // TODO
+    TARGET_DEST_CHANNEL_CASTER         = 106,
     TARGET_UNK_AREA_UNK_DST_107        = 107, // not enough info - only generic spells avalible
-    TARGET_GAMEOBJECT_AREA_PATH        = 108, // TODO
+    TARGET_GAMEOBJECT_AREA_PATH        = 108,
     TARGET_DEST_UNK_110                = 110, // some kind of traj?
+    TOTAL_SPELL_TARGETS
 };
-
-#define TOTAL_SPELL_TARGETS              105
 
 enum SpellMissInfo
 {

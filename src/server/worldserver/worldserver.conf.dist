@@ -22,7 +22,6 @@
 #        Default: "" - no log directory prefix, if used log names isn't
 #         absolute path then logs will be stored in current directory.
 #
-#
 #    LoginDatabaseInfo
 #    WorldDatabaseInfo
 #    CharacterDatabaseInfo
@@ -35,6 +34,30 @@
 #                        "enable-named-pipe" to [mysqld] section my.ini
 #                    .;/path/to/unix_socket;username;password;database
 #                     - use Unix sockets in Unix/Linux
+#
+#    LoginDatabase.WorkerThreads
+#    WorldDatabase.WorkerThreads
+#    CharacterDatabase.WorkerThreads
+#        The amount of worker threads spawned to handle
+#        asynchroneous MySQL statements
+#        Each worker thread is mirrored with its own
+#        connection to the MySQL server and their own
+#        thread on the MySQL server.
+#        Default: 1
+#
+#   LoginDatabase.ThreadBundleMask
+#   WorldDatabase.ThreadBundleMask
+#   CharacterDatabase.ThreadBundleMask
+#       Defines which runnable threads are bundled into one synchroneous
+#       connection. Runnables not specified in the mask will have their
+#       seperate connection to the MySQL server.
+#       Value is a bitmask consisting of:
+#           MYSQL_BUNDLE_NONE   = 0,     Each task will run their own MySQL connection
+#           MYSQL_BUNDLE_CLI    = 1,     Commandline interface thread
+#           MYSQL_BUNDLE_RA     = 2,     Remote admin thread
+#           MYSQL_BUNDLE_RAR    = 4,     Reactor runnable thread
+#           MYSQL_BUNDLE_WORLD  = 8,     WorldRunnable
+#           MYSQL_BUNDLE_ALL    = 15,    All bundled together
 #
 #    MaxPingTime
 #        Settings for maximum database-ping interval (minutes between pings)
@@ -53,6 +76,12 @@ LogsDir = ""
 LoginDatabaseInfo     = "127.0.0.1;3306;trinity;trinity;auth"
 WorldDatabaseInfo     = "127.0.0.1;3306;trinity;trinity;world"
 CharacterDatabaseInfo = "127.0.0.1;3306;trinity;trinity;characters"
+LoginDatabase.WorkerThreads = 1
+WorldDatabase.WorkerThreads = 1
+CharacterDatabase.WorkerThreads = 1
+LoginDatabase.ThreadBundleMask = 15
+WorldDatabase.ThreadBundleMask = 15
+CharacterDatabase.ThreadBundleMask = 15
 MaxPingTime = 30
 WorldServerPort = 8085
 BindIP = "0.0.0.0"
@@ -355,7 +384,6 @@ CleanCharacterDB = 0
 #    CharLogDump.SeparateDir
 #        Subdirectory within logs dir for separate char dumps.
 #
-#
 #    GmLogFile
 #        Log file of gm commands
 #        Default: "gm_commands.log"
@@ -547,7 +575,6 @@ ChatLogTimestamp = 0
 #    RealmZone
 #        Server realm zone (set allowed alphabet in character names/etc)
 #         See also Strict*Names options.
-#
 #        Default: 1 Development    - any language
 #                 2 United States  - extended-Latin
 #                 3 Oceanic        - extended-Latin
@@ -750,6 +777,16 @@ ChatLogTimestamp = 0
 #        Amount of arena points that new players will start with
 #        Default: 0
 #
+#    RecruitAFriend.MaxLevel
+#        Highest level at which a player can benefit from the Recruit-A-Friend
+#         XP multiplier
+#        Default: 60
+#
+#    RecruitAFriend.MaxDifference = 3
+#        Highest level difference between linked players for both players to 
+#         benefit from the Recruit-A-Friend XP multiplier
+#        Default: 3
+#
 #    InstantLogout
 #        Enable or disable instant logout for security level (0..4) or higher
 #        (NOT in combat/while dueling/while falling)
@@ -855,6 +892,10 @@ ChatLogTimestamp = 0
 #        Max distance to creature for group member to get XP at creature death.
 #        Default: 74
 #
+#    MaxRecruitAFriendBonusDistance
+#        Max distance to player for group member to get RaF bonus for XP.
+#        Default: 100
+#
 #    MailDeliveryDelay
 #        Mail delivery delay time for item sending
 #        Default: 3600 sec (1 hour)
@@ -930,6 +971,8 @@ MaxHonorPoints = 75000
 StartHonorPoints = 0
 MaxArenaPoints = 5000
 StartArenaPoints = 0
+RecruitAFriend.MaxLevel = 60
+RecruitAFriend.MaxDifference = 3
 InstantLogout = 1
 DisableWaterBreath = 4
 AllFlightPaths = 0
@@ -949,6 +992,7 @@ Guild.BankEventLogRecordsCount = 25
 MaxPrimaryTradeSkill = 2
 MinPetitionSigns = 9
 MaxGroupXPDistance = 74
+MaxRecruitAFriendBonusDistance = 100
 MailDeliveryDelay = 3600
 SkillChance.Prospecting = 0
 SkillChance.Milling = 0
@@ -1462,12 +1506,16 @@ Visibility.Notify.Period.InBGArenas   = 1000
 #        Default: 1
 #
 #    Rate.Reputation.LowLevel.Kill
-#        Reputation Gain from low level kill (grey creture)
+#        Reputation Gain from low level kill (grey creature)
 #        Default: 1
 #
 #    Rate.Reputation.LowLevel.Quest
 #        Reputation Gain rate
 #        Default: 1
+#
+#    Rate.Reputation.RecruitAFriendBonus
+#        Reputation bonus amount for recruit-a-friend. 0.1 = 10% bonus.
+#        Default: 0.1 (blizzlike)
 #
 #    Rate.MoveSpeed
 #        Multiply the default movement speed for players
@@ -1598,6 +1646,7 @@ Rate.Talent = 1
 Rate.Reputation.Gain = 1
 Rate.Reputation.LowLevel.Kill    = 1
 Rate.Reputation.LowLevel.Quest   = 1
+Rate.Reputation.RecruitAFriendBonus = 0.1
 Rate.MoveSpeed = 1
 Rate.InstanceResetTime = 1
 SkillGain.Crafting = 1
@@ -2108,7 +2157,6 @@ Ra.IP = 0.0.0.0
 Ra.Port = 3443
 Ra.MinLevel = 3
 Ra.Secure = 1
-
 SOAP.Enabled = 0
 SOAP.IP = 127.0.0.1
 SOAP.Port = 7878
@@ -2156,7 +2204,6 @@ CharDelete.KeepDays = 30
 #         Do not enable if you do not know what you are doing!
 #        Default: 0 - off
 #                 1 - on
-#
 #
 #    PlayerStart.MapsExplored
 #        Players will start with all maps explored if enabled
@@ -2303,6 +2350,7 @@ CharDelete.KeepDays = 30
 #        Enable Dungeon Finder system. Will enable dungeon finder and raid finder
 #        Default: 0 - off
 #                 1 - on
+#
 ###############################################################################
 
 PlayerStart.AllReputation = 0

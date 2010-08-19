@@ -29,10 +29,14 @@
 LFGMgr::LFGMgr()
 {
     m_QueueTimer = 0;
-    m_avgWaitTime = -1;
-    m_waitTimeTanks = -1;
-    m_waitTimeHealer = -1;
-    m_waitTimeDps = -1;
+    m_WaitTimeAvg = -1;
+    m_WaitTimeTank = -1;
+    m_WaitTimeHealer = -1;
+    m_WaitTimeDps = -1;
+    m_NumWaitTimeAvg = 0;
+    m_NumWaitTimeTank = 0;
+    m_NumWaitTimeHealer = 0;
+    m_NumWaitTimeDps = 0;
     m_update = true;
     m_lfgProposalId = 1;
 }
@@ -253,10 +257,12 @@ void LFGMgr::Update(uint32 diff)
             LfgProposal *pProposal = *proposals.begin();
             // TODO: Create algorithm to select better group based on GS (uses to be good tank with bad healer and viceversa)
 
-            // Remove groups in the proposal from the queue
+            // Remove groups in the proposal new and current queues (not from queue map)
             for (LfgGuidList::const_iterator it = pProposal->queues.begin(); it != pProposal->queues.end(); ++it)
-                RemoveFromQueue(*it);
-
+            {
+                m_currentQueue.remove(*it);
+                m_newToQueue.remove(*it);
+            }
             m_Proposals[++m_lfgProposalId] = pProposal;
 
             uint32 lowGuid = 0;
@@ -328,23 +334,23 @@ void LFGMgr::Update(uint32 diff)
             if (role & ROLE_TANK)
             {
                 if (role & ROLE_HEALER || role & ROLE_DAMAGE)
-                    waitTime = m_avgWaitTime;
+                    waitTime = m_WaitTimeAvg;
                 else
-                    waitTime = m_waitTimeTanks;
+                    waitTime = m_WaitTimeTank;
             }
             else if (role & ROLE_HEALER)
             {
                 if (role & ROLE_DAMAGE)
-                    waitTime = m_avgWaitTime;
+                    waitTime = m_WaitTimeAvg;
                 else
-                    waitTime = m_waitTimeHealer;
+                    waitTime = m_WaitTimeHealer;
             }
             else if (role & ROLE_DAMAGE)
-                waitTime = m_waitTimeDps;
+                waitTime = m_WaitTimeDps;
 
             for (LfgRolesMap::const_iterator itPlayer = queue->roles.begin(); itPlayer != queue->roles.end(); ++itPlayer)
                 if (Player * plr = sObjectMgr.GetPlayer(itPlayer->first))
-                    plr->GetSession()->SendLfgQueueStatus(dungeonId, waitTime, m_avgWaitTime, m_waitTimeTanks, m_waitTimeHealer, m_waitTimeDps, queuedTime, queue->tanks, queue->healers, queue->dps);
+                    plr->GetSession()->SendLfgQueueStatus(dungeonId, waitTime, m_WaitTimeAvg, m_WaitTimeTank, m_WaitTimeHealer, m_WaitTimeDps, queuedTime, queue->tanks, queue->healers, queue->dps);
         }
     }
     else
@@ -504,6 +510,9 @@ void LFGMgr::Join(Player *plr)
 /// <param name="Group *">Group (could be NULL)</param>
 void LFGMgr::Leave(Player *plr, Group *grp /* = NULL*/)
 {
+    if (plr && !plr->GetLfgUpdate())
+        return;
+
     uint64 guid = grp ? grp->GetGUID() : plr ? plr->GetGUID() : 0;
 
     // Remove from Role Checks
@@ -623,12 +632,15 @@ bool LFGMgr::RemoveFromQueue(uint64 guid)
 /// <param name="LfgProposalList *">Proposals found.</param>
 void LFGMgr::FindNewGroups(LfgGuidList &check, LfgGuidList all, LfgProposalList *proposals)
 {
+    if (!check.size() || check.size() > MAXGROUPSIZE)
+        return;
+
     uint8 numPlayers = 0;
     uint8 numLfgGroups = 0;
     uint32 groupLowGuid = 0;
     LfgQueueInfoMap pqInfoMap;
     LfgQueueInfoMap::iterator itQueue;
-    for (LfgGuidList::const_iterator it = check.begin(); it != check.end(); ++it)
+    for (LfgGuidList::const_iterator it = check.begin(); it != check.end() && numLfgGroups < 2 && numPlayers <= MAXGROUPSIZE; ++it)
     {
         itQueue = m_QueueInfoMap.find(*it);
         if (itQueue == m_QueueInfoMap.end())
@@ -661,7 +673,7 @@ void LFGMgr::FindNewGroups(LfgGuidList &check, LfgGuidList all, LfgProposalList 
 
     if (numPlayers < MAXGROUPSIZE)
     {
-        while (!all.empty() && check.size() < MAXGROUPSIZE)
+        while (!all.empty() && !proposals->size())
         {
             check.push_back(all.front());
             all.pop_front();
@@ -1065,9 +1077,10 @@ void LFGMgr::UpdateProposal(uint32 proposalId, uint32 lowGuid, uint8 accept)
     LfgProposal *pProposal = itProposal->second;
 
     // Check if proposal have the current player
-    LfgProposalPlayer *ppPlayer = pProposal->players[lowGuid];
-    if (!ppPlayer)
-        return;
+    LfgProposalPlayerMap::iterator itProposalPlayer = pProposal->players.find(lowGuid);
+    if (itProposalPlayer == pProposal->players.end())
+         return;
+    LfgProposalPlayer *ppPlayer = itProposalPlayer->second;
 
     ppPlayer->accept = accept;
     if (!accept)
@@ -1085,10 +1098,13 @@ void LFGMgr::UpdateProposal(uint32 proposalId, uint32 lowGuid, uint8 accept)
     {
         plr = sObjectMgr.GetPlayer(itPlayers->first);
 
-        if (plr && itPlayers->first == pProposal->leaderLowGuid)
-            players.push_front(plr);
-        else
-            players.push_back(plr);
+        if (plr)
+        {
+            if (itPlayers->first == pProposal->leaderLowGuid)
+                players.push_front(plr);
+            else
+                players.push_back(plr);
+        }
 
         if (itPlayers->second->accept < 1)                  // No answer (-1) or not accepted (0)
             allAnswered = false;
@@ -1103,6 +1119,11 @@ void LFGMgr::UpdateProposal(uint32 proposalId, uint32 lowGuid, uint8 accept)
     {
         bool sendUpdate = pProposal->state != LFG_PROPOSAL_SUCCESS;
         pProposal->state = LFG_PROPOSAL_SUCCESS;
+        time_t joinTime = time_t(time(NULL));
+        uint8 role = 0;
+        int32 waitTime = -1;
+        LfgQueueInfoMap::iterator itQueue;
+        uint64 guid = 0;
 
         // Create a new group (if needed)
         Group *grp = sObjectMgr.GetGroupByGUID(pProposal->groupLowGuid);
@@ -1111,15 +1132,19 @@ void LFGMgr::UpdateProposal(uint32 proposalId, uint32 lowGuid, uint8 accept)
             plr = *it;
             if (sendUpdate)
                 SendUpdateProposal(plr, proposalId, pProposal);
-            //plr->SetLfgSendUpdates(false);
+            plr->SetLfgUpdate(false);
             if (plr->GetGroup())
             {
+                guid = plr->GetGroup()->GetGUID();
+                plr->GetSession()->SendLfgUpdateParty(LFG_UPDATETYPE_GROUP_FOUND);
                 if (plr->GetGroup() != grp)
                     plr->RemoveFromGroup();
-                plr->GetSession()->SendLfgUpdateParty(LFG_UPDATETYPE_GROUP_FOUND);
             }
             else
+            {
+                guid = plr->GetGUID();
                 plr->GetSession()->SendLfgUpdatePlayer(LFG_UPDATETYPE_GROUP_FOUND);
+            }
 
             if (!grp)
             {
@@ -1129,9 +1154,39 @@ void LFGMgr::UpdateProposal(uint32 proposalId, uint32 lowGuid, uint8 accept)
                 sObjectMgr.AddGroup(grp);
             }
             else if (plr->GetGroup() != grp)
-                grp->AddMember(plr->GetGUID(), plr->GetName());
+               grp->AddMember(plr->GetGUID(), plr->GetName());
+            plr->SetLfgUpdate(true);
+            // Update timers
+            role = plr->GetLfgRoles();
+            itQueue = m_QueueInfoMap.find(guid);
+            if (itQueue == m_QueueInfoMap.end())
+            {
+                sLog.outError("LFGMgr::UpdateProposal: Queue info for guid " UI64FMTD " not found!", guid);
+                waitTime = -1;
+            }
+            else
+            {
+                waitTime = int32(joinTime - itQueue->second->joinTime);
+
+                if (role & ROLE_TANK)
+                {
+                    if (role & ROLE_HEALER || role & ROLE_DAMAGE)
+                        m_WaitTimeAvg = int32((m_WaitTimeAvg * m_NumWaitTimeAvg + waitTime) / ++m_NumWaitTimeAvg);
+                    else
+                        m_WaitTimeTank = int32((m_WaitTimeTank * m_NumWaitTimeTank + waitTime) / ++m_NumWaitTimeTank);
+                }
+                else if (role & ROLE_HEALER)
+                {
+                    if (role & ROLE_DAMAGE)
+                        m_WaitTimeAvg = int32((m_WaitTimeAvg * m_NumWaitTimeAvg + waitTime) / ++m_NumWaitTimeAvg);
+                    else
+                        m_WaitTimeHealer = int32((m_WaitTimeHealer * m_NumWaitTimeHealer + waitTime) / ++m_NumWaitTimeHealer);
+                }
+                else if (role & ROLE_DAMAGE)
+                    m_WaitTimeDps = int32((m_WaitTimeDps * m_NumWaitTimeDps + waitTime) / ++m_NumWaitTimeDps);
+            }
+  
             grp->SetLfgRoles(plr->GetGUID(), pProposal->players[plr->GetGUIDLow()]->role);
-            //plr->SetLfgSendUpdates(true);
         }
 
         // Set the dungeon difficulty
@@ -1206,6 +1261,7 @@ void LFGMgr::RemoveProposal(LfgProposalMap::iterator itProposal, LfgUpdateType t
                 updateType = LFG_UPDATETYPE_REMOVED_FROM_QUEUE;
             else
             {
+                itQueue->second->joinTime = time_t(time(NULL));
                 AddGuidToNewQueue(guid);
                 updateType = LFG_UPDATETYPE_ADDED_TO_QUEUE;
             }

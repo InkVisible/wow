@@ -166,6 +166,14 @@ void SpellCastTargets::setDst(WorldObject &wObj)
     m_targetMask |= TARGET_FLAG_DEST_LOCATION;
 }
 
+void SpellCastTargets::setDst(SpellCastTargets &spellTargets)
+{
+    m_dstTransGUID = spellTargets.m_dstTransGUID;
+    m_dstTransOffset.Relocate(spellTargets.m_dstTransOffset);
+    m_dstPos.Relocate(spellTargets.m_dstPos);
+    m_targetMask |= TARGET_FLAG_DEST_LOCATION;
+}
+
 void SpellCastTargets::modDst(Position &pos)
 {
     ASSERT(m_targetMask & TARGET_FLAG_DEST_LOCATION);
@@ -2017,6 +2025,11 @@ void Spell::SelectEffectTargets(uint32 i, uint32 cur)
                     if (Guardian* pet = m_caster->GetGuardianPet())
                         AddUnitTarget(pet, i);
                     break;
+                case TARGET_UNIT_SUMMONER:
+                    if (m_caster->isSummon())
+                        if (Unit* unit = m_caster->ToTempSummon()->GetSummoner())
+                            AddUnitTarget(unit, i);
+                    break;
                 case TARGET_UNIT_PARTY_CASTER:
                 case TARGET_UNIT_RAID_CASTER:
                     pushType = PUSH_CASTER_CENTER;
@@ -2071,8 +2084,7 @@ void Spell::SelectEffectTargets(uint32 i, uint32 cur)
                 case TARGET_UNIT_TARGET_ALLY:
                 case TARGET_UNIT_TARGET_RAID:
                 case TARGET_UNIT_TARGET_PARTY:
-                case TARGET_UNIT_MINIPET:
-                case TARGET_UNIT_UNK_92:
+                case TARGET_UNIT_TARGET_PUPPET:
                     AddUnitTarget(target, i);
                     break;
                 case TARGET_UNIT_PARTY_TARGET:
@@ -2327,20 +2339,23 @@ void Spell::SelectEffectTargets(uint32 i, uint32 cur)
 
             switch (cur)
             {
-                case TARGET_UNIT_CHANNEL:
-                    // in some cases unittarget is invalid and crash. do not know why it happens.
+                case TARGET_UNIT_CHANNEL_TARGET:
+                    // unit target may be no longer avalible - teleported out of map for example
                     if (Unit* target = Unit::GetUnit(*m_caster, m_originalCaster->GetCurrentSpell(CURRENT_CHANNELED_SPELL)->m_targets.getUnitTargetGUID()))
                         AddUnitTarget(target, i);
                     else
                         sLog.outError("SPELL: cannot find channel spell target for spell ID %u", m_spellInfo->Id);
                     break;
-                case TARGET_DEST_CHANNEL:
+                case TARGET_DEST_CHANNEL_TARGET:
                     if (m_originalCaster->GetCurrentSpell(CURRENT_CHANNELED_SPELL)->m_targets.HasDst())
-                        m_targets = m_originalCaster->GetCurrentSpell(CURRENT_CHANNELED_SPELL)->m_targets;
+                        m_targets.setDst(m_originalCaster->GetCurrentSpell(CURRENT_CHANNELED_SPELL)->m_targets);
                     else if (Unit* target = Unit::GetUnit(*m_caster, m_originalCaster->GetCurrentSpell(CURRENT_CHANNELED_SPELL)->m_targets.getUnitTargetGUID()))
                         m_targets.setDst(*target);
                     else
                         sLog.outError("SPELL: cannot find channel spell destination for spell ID %u", m_spellInfo->Id);
+                    break;
+                case TARGET_DEST_CHANNEL_CASTER:
+                    m_targets.setDst(*m_originalCaster->GetCurrentSpell(CURRENT_CHANNELED_SPELL)->GetCaster());
                     break;
             }
             break;
@@ -2453,6 +2468,7 @@ void Spell::SelectEffectTargets(uint32 i, uint32 cur)
                 break;
             case TARGET_GAMEOBJECT_AREA_SRC:
             case TARGET_GAMEOBJECT_AREA_DST:
+            case TARGET_GAMEOBJECT_AREA_PATH:
                 radius = GetSpellRadius(m_spellInfo, i, true);
                 targetType = SPELL_TARGETS_GO;
                 break;
@@ -4823,11 +4839,11 @@ SpellCastResult Spell::CheckCast(bool strict)
 
             if (m_caster->GetTypeId() == TYPEID_PLAYER)
             {
-                // Not allow banish not self target
+                // Do not allow to banish target tapped by someone not in caster's group
                 if (m_spellInfo->Mechanic == MECHANIC_BANISH)
-                    if (target->GetTypeId() == TYPEID_UNIT &&
-                        !m_caster->ToPlayer()->isAllowedToLoot(target->ToCreature()))
-                        return SPELL_FAILED_CANT_CAST_ON_TAPPED;
+                    if (Creature *targetCreature = target->ToCreature())
+                        if (targetCreature->hasLootRecipient() && !targetCreature->isTappedBy(m_caster->ToPlayer()))
+                            return SPELL_FAILED_CANT_CAST_ON_TAPPED;
 
                 if (m_customAttr & SPELL_ATTR_CU_PICKPOCKET)
                 {
@@ -4842,7 +4858,8 @@ SpellCastResult Spell::CheckCast(bool strict)
                 {
                     if (target->GetTypeId() == TYPEID_PLAYER)
                     {
-                        if (!target->ToPlayer()->GetWeaponForAttack(BASE_ATTACK) || !target->ToPlayer()->IsUseEquipedWeapon(true))
+                        Player *player = target->ToPlayer();
+                        if (!player->GetWeaponForAttack(BASE_ATTACK) || !player->IsUseEquipedWeapon(true))
                             return SPELL_FAILED_TARGET_NO_WEAPONS;
                     }
                     else if (!target->GetUInt32Value(UNIT_VIRTUAL_ITEM_SLOT_ID))
@@ -6880,6 +6897,8 @@ bool Spell::IsValidSingleTargetEffect(Unit const* target, Targets type) const
             return m_caster != target && m_caster->IsInPartyWith(target);
         case TARGET_UNIT_TARGET_RAID:
             return m_caster->IsInRaidWith(target);
+        case TARGET_UNIT_TARGET_PUPPET:
+            return target->HasUnitTypeMask(UNIT_MASK_PUPPET) && m_caster == target->GetOwner();
     }
     return true;
 }

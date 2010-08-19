@@ -46,16 +46,16 @@
 #include "Transport.h"
 
 /// WorldSession constructor
-WorldSession::WorldSession(uint32 id, WorldSocket *sock, AccountTypes sec, uint8 expansion, time_t mute_time, LocaleConstant locale) :
+WorldSession::WorldSession(uint32 id, WorldSocket *sock, AccountTypes sec, uint8 expansion, time_t mute_time, LocaleConstant locale, uint32 recruiter) :
 m_muteTime(mute_time), _player(NULL), m_Socket(sock),_security(sec), _accountId(id), m_expansion(expansion),
 m_sessionDbcLocale(sWorld.GetAvailableDbcLocale(locale)), m_sessionDbLocaleIndex(sObjectMgr.GetIndexForLocale(locale)),
 _logoutTime(0), m_inQueue(false), m_playerLoading(false), m_playerLogout(false), m_playerRecentlyLogout(false), m_playerSave(false),
-m_latency(0), m_TutorialsChanged(false), m_timeOutTime(0)
+m_latency(0), m_TutorialsChanged(false), m_timeOutTime(0), recruiterId(recruiter)
 {
     if (sock)
     {
-        m_Address = sock->GetRemoteAddress ();
-        sock->AddReference ();
+        m_Address = sock->GetRemoteAddress();
+        sock->AddReference();
         ResetTimeOutTime();
         LoginDatabase.PExecute("UPDATE account SET online = 1 WHERE id = %u;", GetAccountId());
     }
@@ -289,6 +289,8 @@ bool WorldSession::Update(uint32 diff)
 
         delete packet;
     }
+
+    ProcessQueryCallbacks();
 
     time_t currTime = time(NULL);
     ///- If necessary, log the player out
@@ -954,4 +956,64 @@ void WorldSession::SetPlayer(Player *plr)
     // set m_GUID that can be used while player loggined and later until m_playerRecentlyLogout not reset
     if (_player)
         m_GUIDLow = _player->GetGUIDLow();
+}
+
+void WorldSession::ProcessQueryCallbacks()
+{
+    QueryResult_AutoPtr result;
+
+    //! HandleNameQueryOpcode
+    while (!m_nameQueryCallbacks.is_empty())
+    {
+        QueryResultFuture lResult;
+        ACE_Time_Value timeout = ACE_Time_Value::zero;
+        if (m_nameQueryCallbacks.next_readable(lResult, &timeout) != 1)
+           break;
+ 
+        lResult.get(result);
+        SendNameQueryOpcodeFromDBCallBack(result);
+    }
+    
+    //! HandleCharEnumOpcode
+    if (m_charEnumCallback.ready())
+    {
+        m_charEnumCallback.get(result);
+        HandleCharEnum(result);
+        m_charEnumCallback.cancel();
+    }
+
+    //! HandlePlayerLoginOpcode
+    if (m_charLoginCallback.ready())
+    {
+        SQLQueryHolder* param;
+        m_charLoginCallback.get(param);
+        HandlePlayerLogin((LoginQueryHolder*)param);
+        m_charLoginCallback.cancel();
+    }
+
+    //! HandleAddFriendOpcode
+    if (m_addFriendCallback.IsReady())
+    {
+        const std::string& param = m_addFriendCallback.GetParam();
+        m_addFriendCallback.GetResult(result);
+        HandleAddFriendOpcodeCallBack(result, param);
+        m_addFriendCallback.FreeResult();
+    }
+
+    //- HandleCharRenameOpcode
+    if (m_charRenameCallback.IsReady())
+    {
+        const std::string& param = m_charRenameCallback.GetParam();
+        m_charRenameCallback.GetResult(result);
+        HandleChangePlayerNameOpcodeCallBack(result, param);
+        m_charRenameCallback.FreeResult();
+    }
+    
+    //- HandleCharAddIgnoreOpcode
+    if (m_addIgnoreCallback.ready())
+    {
+        m_addIgnoreCallback.get(result);
+        HandleAddIgnoreOpcodeCallBack(result);
+        m_addIgnoreCallback.cancel();
+    }
 }

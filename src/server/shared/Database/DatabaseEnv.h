@@ -22,14 +22,16 @@
 #define DATABASEENV_H
 
 #include "Common.h"
-#include "Logging/Log.h"
-#include "Debugging/Errors.h"
+#include "Log.h"
+#include "Errors.h"
 
-#include "Database/Field.h"
-#include "Database/QueryResult.h"
+#include "Field.h"
+#include "QueryResult.h"
 
-#include "Database/Database.h"
-typedef Database DatabaseType;
+#include "DatabaseWorkerPool.h"
+#include "MySQLThreading.h"
+
+typedef DatabaseWorkerPool DatabaseType;
 #define _LIKE_           "LIKE"
 #define _TABLE_SIM_      "`"
 #define _CONCAT3_(A,B,C) "CONCAT( " A " , " B " , " C " )"
@@ -38,6 +40,8 @@ typedef Database DatabaseType;
 extern DatabaseType WorldDatabase;
 extern DatabaseType CharacterDatabase;
 extern DatabaseType LoginDatabase;
+
+#define MAX_QUERY_LEN 32*1024
 
 #endif
 
