@@ -59,19 +59,32 @@ bool DatabaseWorkerPool::Open(const std::string& infoString, uint8 num_threads)
 
 void DatabaseWorkerPool::Close()
 {
+    DEBUG_LOG("Closing down %u connections on this DatabaseWorkerPool", (uint32)m_connections.value());
     /// Shuts down worker threads for this connection pool.
+    ACE_Thread_Mutex shutdown_Mtx;
+    ACE_Condition_Thread_Mutex m_condition(shutdown_Mtx);
     for (uint8 i = 0; i < m_async_connections.size(); i++)
     {
-        Enqueue(new DatabaseWorkerPoolEnd());
+        Enqueue(new DatabaseWorkerPoolEnd(m_condition));
+        m_condition.wait();
+        --m_connections;
     }
     
     m_queue->queue()->deactivate();
 
     delete m_bundle_conn;
     m_bundle_conn = NULL;
+    --m_connections;
+    DEBUG_LOG("Closed bundled connection.");
 
     //- MySQL::Thread_End() should be called manually from the aborting calling threads
-    ASSERT( m_sync_connections.empty() );
+    DEBUG_LOG("Waiting for %u synchroneous database threads to exit.", (uint32)m_connections.value());
+    while (!m_sync_connections.empty())
+    {
+    }
+    DEBUG_LOG("Synchroneous database threads exited succesfuly.");
+
+    mysql_library_end();
 }
 
 /*! This function creates a new MySQL connection for every MapUpdate thread
@@ -89,6 +102,8 @@ void DatabaseWorkerPool::Init_MySQL_Connection()
 
     sLog.outDebug("Core thread with ID ["UI64FMTD"] initializing MySQL connection.",
         (uint64)ACE_Based::Thread::currentId());
+
+    ++m_connections;
 }
 
 void DatabaseWorkerPool::End_MySQL_Connection()
@@ -96,10 +111,13 @@ void DatabaseWorkerPool::End_MySQL_Connection()
     MySQLConnection* conn;
     {
         ACE_Guard<ACE_Thread_Mutex> guard(m_connectionMap_mtx);
-        conn = m_sync_connections[ACE_Based::Thread::current()];
+        ConnectionMap::iterator itr = m_sync_connections.find(ACE_Based::Thread::current());
+        conn = itr->second;
+        m_sync_connections.erase(itr);
     }
     delete conn;
     conn = NULL;
+    --m_connections;
 }
 
 void DatabaseWorkerPool::Execute(const char* sql)
@@ -187,6 +205,7 @@ void DatabaseWorkerPool::RollbackTransaction()
     {
         itr->second->ForcefulDelete();
         delete itr->second;
+        itr->second = NULL;
     }
 }
 
@@ -198,7 +217,7 @@ void DatabaseWorkerPool::CommitTransaction()
     if (itr != m_tranQueues.end() && itr->second != NULL)
     {
         Enqueue(itr->second);
-        m_tranQueues.erase(itr);
+        itr->second = NULL;
     }
 }
 

@@ -1578,7 +1578,7 @@ bool Unit::IsDamageReducedByArmor(SpellSchoolMask schoolMask, SpellEntry const *
 
         // bleeding effects are not reduced by armor
         if (effIndex != MAX_SPELL_EFFECTS && spellInfo->EffectApplyAuraName[effIndex] == SPELL_AURA_PERIODIC_DAMAGE)
-            if (GetSpellMechanicMask(spellInfo, effIndex) & MECHANIC_BLEED)
+            if (GetSpellMechanicMask(spellInfo, effIndex) & (1<<MECHANIC_BLEED))
                 return false;
     }
     return true;
@@ -7984,6 +7984,7 @@ bool Unit::HandleAuraProc(Unit * pVictim, uint32 damage, Aura * triggeredByAura,
                     // Make sure 28682 wasn't already removed by previous call
                     if(HasAura(28682))
                         this->CastSpell(this, 28682, true);
+
                     return false; // ordinary chrages will be removed during crit chance computations.
                 }
                 // Empowered Fire
@@ -16380,7 +16381,7 @@ void Unit::EnterVehicle(Vehicle *vehicle, int8 seatId)
 
     if (GetTypeId() == TYPEID_PLAYER)
     {
-        if(this->ToPlayer()->isInCombat())
+        if (vehicle->GetBase()->GetTypeId() == TYPEID_PLAYER && this->ToPlayer()->isInCombat())
             return;
 
         this->ToPlayer()->InterruptNonMeleeSpells(false);
