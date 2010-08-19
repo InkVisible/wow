@@ -29,7 +29,6 @@
 #include "Configuration/Config.h"
 #include "Log.h"
 #include "SystemConfig.h"
-#include "revision_sql.h"
 #include "Util.h"
 #include "SignalHandler.h"
 #include "RealmList.h"
