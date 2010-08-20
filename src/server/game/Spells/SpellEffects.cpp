@@ -5241,6 +5241,11 @@ void Spell::EffectScriptEffect(uint32 effIndex)
                     }
                     return;
                 }
+                case 62705:
+                {
+                    if (!unitTarget->isInCombat())
+                        unitTarget->SetHealth(unitTarget->GetMaxHealth());
+                }
                 case 71342:                                     // Big Love Rocket
                 {
                     if (!unitTarget || unitTarget->GetTypeId() != TYPEID_PLAYER)

@@ -974,6 +974,10 @@ void Spell::AddUnitTarget(Unit* pVictim, uint32 effIndex)
     if (!CheckTarget(pVictim, effIndex))
         return;
 
+    // Skip if has aura "Recently Reapaired"
+    if (pVictim->HasAura(62705))
+        return;
+
     // Check for effect immune skip if immuned
     bool immuned = pVictim->IsImmunedToSpellEffect(m_spellInfo, effIndex);
 
