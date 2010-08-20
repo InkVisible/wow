@@ -918,13 +918,6 @@ void MailDraft::SendMailTo(MailReceiver const& receiver, MailSender const& sende
 
     uint32 mailId = sObjectMgr.GenerateMailID();
 
-    if (receiver.GetPlayerGUIDLow() == auctionbot.GetAHBplayerGUID())
-    {
-        if (sender.GetMailMessageType() == MAIL_AUCTION)        // auction mail with items
-            deleteIncludedItems(true);
-        return;
-    }
-
     time_t deliver_time = time(NULL) + deliver_delay;
 
     //expire time if COD 3 days, if no COD 30 days, if auction sale pending 1 hour
