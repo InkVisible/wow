@@ -33,6 +33,7 @@
 #include "BattlegroundMgr.h"
 #include "Item.h"
 #include "AuctionHouseMgr.h"
+#include "AuctionHouseBot.h"
 
 enum MailShowFlags
 {
